@@ -1,0 +1,165 @@
+###########################################################
+#Script für SuS-verknüpfung mit Manager gemäss LO export. Im gleichen Zuge werden die Attribute (Schule & Titel) hinterlegt
+#
+#
+#
+#
+#
+#Versionen
+#06.04. MIK Script erstellt. Offen: Wenn mehre LP im Filter wird nur der erste genommen (gleiche Namen).
+#
+
+################# Starto #######################################
+
+#logging for lazy ppl
+Start-Transcript -Path "$($PSScriptRoot)\log.txt" -Append
+
+Install-Module MSOnline -Scope CurrentUser
+Install-Module AzureAD -Scope CurrentUser
+Import-Module AzureAD
+$env:PSModulePath=$env:PSModulePath+";"+'C:\Users\micha\OneDrive - PSAH\Dokumente\WindowsPowerShell\Modules'
+
+#Services Verbinden
+$credential = Get-Credential
+Connect-AzureAD -Credential $credential
+Connect-MsolService -Credential $credential
+
+#Output verstecken
+function Out-Default {}
+
+#Export Lehreroffice. Nichts anpassen. Dateipfad abfragen
+$CSVPath = Read-Host "CSV Pfad"
+
+#abbrechen falls CSV leer
+
+#import der Daten ohne leerzeilen oder ohne schumir infos
+$LODaten = Import-Csv -Path $CSVPath -Delimiter ";"  | Where-Object { $_.PSObject.Properties.Value -ne '' -and $_."S_FREIFELD_1 (Benutzername)" -ne ''}
+$lodatenmenge = $LODaten.Count
+
+Write-Host "Anzahl Datensätze: $lodatenmenge" 
+sleep 2
+
+#Schulobjekte, welche von Feld "K_Schulhaus_Name" kommen
+$schulenPSAH = @("KG Giessen","KG Wees","Wees","Haslach","Blattacker")
+$schulenOMR = @("OMR")    
+$schulenPSBE = @() 
+$schulenPSBA = @() 
+
+
+
+ 
+
+    #verifizierung und ergänzung von @schumir.ch zu den Usernamen
+    if(($LODaten.'S_FREIFELD_1 (Benutzername)' -match "@schumir.ch").Count -lt ($LODaten.'S_FREIFELD_1 (Benutzername)').Count ){
+
+    Write-Host "Einträge mit @schumir.ch ergänzen falls nötig. Folgende Daten werden verwendet"
+    $LODaten.'S_FREIFELD_1 (Benutzername)' -notmatch "@schumir.ch"  | foreach {$_ + "@schumir.ch"} -OutVariable Schumirusername
+        
+    Write-Host $Schumirusername -ForegroundColor Green -Separator `n
+
+
+
+    sleep 5
+
+ 
+    } else{
+
+    Write-Host -ForegroundColor Green "User haben bereits @schumir.ch" 
+    }
+
+
+
+#für jeden Datensatz im CSV den User abfüllen
+
+
+#####
+# Update von User Property.
+#
+######
+
+        foreach ($User in $Schumirusername){
+ 
+            #weitere Daten aus dem LO Import holen. das @schumir.ch muss wieder entfernt werden.
+            $cutuser = $User -replace "@.*"
+            $Userzusatzdaten =  $LODaten | select "S_FREIFELD_1 (Benutzername)","K_Schulhaus_Name","L_KL1_Vorname","L_KL1_Name" | ? {$_."S_FREIFELD_1 (Benutzername)" -eq "$cutuser"}
+            #wird später für den Manager verwendet
+            $Userobjectid = Get-MsolUser -UserPrincipalName $User | select ObjectId
+
+            #Setzt Titel SuS in den Userproperties
+            set-msoluser -UserPrincipalName $User -Title "SuS" 
+
+            #prüfung in welcher Schule die Kinder gehen und setzen des Office Properties
+            switch($true) {
+                    ($schulenPSAH).Contains($Userzusatzdaten.K_Schulhaus_Name) {
+                        
+                        Write-Host "PSAH SuS" 
+                        #Setzt Office zu PSAH
+                        set-msoluser -UserPrincipalName $User -Office "PSAH" 
+
+                    }
+                    ($schulenOMR).Contains($Userzusatzdaten.K_Schulhaus_Name){
+
+                        Write-Host "OMR SuS"
+                        #Setzt Office zu PSAH
+                        set-msoluser -UserPrincipalName $User -Office "OMR"  
+                    
+                    }
+                    ($schulenPSBE).Contains($Userzusatzdaten.K_Schulhaus_Name){
+
+                        Write-Host "PSBE SuS" 
+                        #Setzt Office zu PSAH
+                        set-msoluser -UserPrincipalName $User -Office "PSBE"  
+                    
+                    }
+                    ($schulenPSBA).Contains($Userzusatzdaten.K_Schulhaus_Name){
+
+                        Write-Host "PSBA SuS" 
+                        #Setzt Office zu PSAH
+                        set-msoluser -UserPrincipalName $User -Office "PSBA" 
+
+                    }
+
+
+                    default {Write-Host -BackgroundColor Red "Schule konnte nicht gesetzt werden für $User"}
+               }
+
+            #Verbindet den Vorgesetzten
+            #Zusammenführen der Klassenlehrpersondaten
+            $KlassenLP = @($Userzusatzdaten."L_KL1_Vorname",$Userzusatzdaten."L_KL1_Name")
+        
+            #Suchen (mehrere möglich)       
+            $Manager = Get-MsolUser -SearchString "$KlassenLP" -All | select ObjectId,Title,Displayname,SignInName,UserType -OutVariable ListeKlassenLP
+        
+            #Filtern ob mehr als 1 Manager
+            if($Manager.PSObject.Properties.Value -ne '' -and $Manager.PSObject.Properties.Value -eq 1) {    
+
+                Set-AzureADUserManager -ObjectId ($Userobjectid).ObjectId -RefObjectId ($Manager.ObjectId).Guid
+                $Managername = $Manager.DisplayName
+                Write-Host "$User hat nun den Manager -- $Managername -- hinterlegt"  -ForegroundColor Green -Separator `n
+
+                $KlassenLP = $null
+                $Manager = $null
+                $Userobjectid = $null
+                $Userzusatzdaten
+                $LPdaten = $null
+                $Managername = $null
+                }else {
+
+                Write-Host "Michael war zu Faul für diesen Fall. Mehrere LP haben den gleichen Namen. Michael motivieren weiterzumachen."
+                exit 0 
+
+                }
+
+            }
+
+
+#Verbindungen M365 schliessen
+Disconnect-AzureAD 
+
+#end logging
+Stop-Transcript
+
+
+################# Endo #######################################
+
+
