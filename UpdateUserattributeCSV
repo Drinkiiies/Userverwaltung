@@ -17,7 +17,7 @@ Start-Transcript -Path "$($PSScriptRoot)\log.txt" -Append
 Install-Module MSOnline -Scope CurrentUser
 Install-Module AzureAD -Scope CurrentUser
 Import-Module AzureAD
-$env:PSModulePath=$env:PSModulePath+";"+'C:\Users\micha\OneDrive - PSAH\Dokumente\WindowsPowerShell\Modules'
+#$env:PSModulePath=$env:PSModulePath+";"+'C:\Users\micha\OneDrive - PSAH\Dokumente\WindowsPowerShell\Modules'
 
 #Services Verbinden
 $credential = Get-Credential
