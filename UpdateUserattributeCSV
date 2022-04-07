@@ -6,8 +6,8 @@
 #
 #
 #Versionen
-#06.04. MIK Script erstellt. Offen: Wenn mehre LP im Filter wird nur der erste genommen (gleiche Namen).
-#
+#06.04. Script erstellt. Offen: Wenn mehre LP im Filter wird nur der erste genommen (gleiche Namen).
+#07.04  Ergänzung Berg und Breite. Prüfung @schmumir.ch braucht noch logicergänzungen...
 
 ################# Starto #######################################
 
@@ -17,7 +17,7 @@ Start-Transcript -Path "$($PSScriptRoot)\log.txt" -Append
 Install-Module MSOnline -Scope CurrentUser
 Install-Module AzureAD -Scope CurrentUser
 Import-Module AzureAD
-#$env:PSModulePath=$env:PSModulePath+";"+'C:\Users\micha\OneDrive - PSAH\Dokumente\WindowsPowerShell\Modules'
+$env:PSModulePath=$env:PSModulePath+";"+'C:\Users\micha\OneDrive - PSAH\Dokumente\WindowsPowerShell\Modules'
 
 #Services Verbinden
 $credential = Get-Credential
@@ -40,10 +40,10 @@ Write-Host "Anzahl Datensätze: $lodatenmenge"
 sleep 2
 
 #Schulobjekte, welche von Feld "K_Schulhaus_Name" kommen
-$schulenPSAH = @("KG Giessen","KG Wees","Wees","Haslach","Blattacker")
+$schulenPSAH = @("KG Giessen","KG Wees","Wees","Haslach","Blattacker","KG Blattacker","KG Weed","Reichenbündt","Sonnenberg")
 $schulenOMR = @("OMR")    
 $schulenPSBE = @() 
-$schulenPSBA = @() 
+$schulenPSBA = @("Berg","Breite") 
 
 
 
@@ -63,8 +63,8 @@ $schulenPSBA = @()
 
  
     } else{
-
-    Write-Host -ForegroundColor Green "User haben bereits @schumir.ch" 
+  
+    Write-Host -ForegroundColor Green "Bitte @schumir.ch entfernen. Die Logic muss erweiteret werden." 
     }
 
 
@@ -100,21 +100,21 @@ $schulenPSBA = @()
                     ($schulenOMR).Contains($Userzusatzdaten.K_Schulhaus_Name){
 
                         Write-Host "OMR SuS"
-                        #Setzt Office zu PSAH
+                        #Setzt Office zu OMR
                         set-msoluser -UserPrincipalName $User -Office "OMR"  
                     
                     }
                     ($schulenPSBE).Contains($Userzusatzdaten.K_Schulhaus_Name){
 
                         Write-Host "PSBE SuS" 
-                        #Setzt Office zu PSAH
+                        #Setzt Office zu PSBE
                         set-msoluser -UserPrincipalName $User -Office "PSBE"  
                     
                     }
                     ($schulenPSBA).Contains($Userzusatzdaten.K_Schulhaus_Name){
 
                         Write-Host "PSBA SuS" 
-                        #Setzt Office zu PSAH
+                        #Setzt Office zu PSBA
                         set-msoluser -UserPrincipalName $User -Office "PSBA" 
 
                     }
@@ -126,7 +126,7 @@ $schulenPSBA = @()
             #Verbindet den Vorgesetzten
             #Zusammenführen der Klassenlehrpersondaten
             $KlassenLP = @($Userzusatzdaten."L_KL1_Vorname",$Userzusatzdaten."L_KL1_Name")
-        
+            
             #Suchen (mehrere möglich)       
             $Manager = Get-MsolUser -SearchString "$KlassenLP" -All | select ObjectId,Title,Displayname,SignInName,UserType -OutVariable ListeKlassenLP
         
@@ -145,8 +145,8 @@ $schulenPSBA = @()
                 $Managername = $null
                 }else {
 
-                Write-Host "Michael war zu Faul für diesen Fall. Mehrere LP haben den gleichen Namen. Michael motivieren weiterzumachen."
-                exit 0 
+                Write-Host "Michael war zu Faul für diesen Fall. Mehrere LP haben den gleichen Namen, LP existiert so nicht (namenswechsel?). Michael motivieren weiterzumachen."
+                
 
                 }
 
